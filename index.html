@@ -2721,37 +2721,45 @@ function buildSearchIndex() {
 }
 
 function tokenize(text) {
+    // Common stopwords that cause false matches across all 6 languages
+    const stopwords = new Set([
+        'the','and','for','are','but','not','you','all','can','had','her','was','one','our','out','has','his','how',
+        'its','may','new','now','old','see','way','who','did','get','let','say','she','too','use','les','des','une',
+        'que','est','par','sur','pas','son','ses','aux','der','die','das','und','den','dem','von','mit','ist','ein',
+        'eine','los','las','del','por','con','una','que','como','para','más','esta','esto','hay'
+    ]);
     return text.toLowerCase()
         .replace(/[¿¡?!.,;:'"(){}[\]\/\-—–]/g, ' ')
         .split(/\s+/)
-        .filter(w => w.length > 2);
+        .filter(w => w.length > 2 && !stopwords.has(w));
 }
 
 // Keyword synonyms to improve matching
 const synonyms = {
-    'wifi': ['internet', 'wi-fi', 'wireless', 'connection', 'red', 'réseau', 'wlan', 'contraseña', 'password', 'mot de passe', 'passwort', 'пароль'],
+    'wifi': ['internet', 'wi-fi', 'wireless', 'connection', 'réseau', 'wlan', 'contraseña', 'password', 'mot de passe', 'passwort', 'пароль', 'كلمة السر'],
     'pool': ['swimming', 'piscina', 'piscine', 'schwimmbad', 'бассейн', 'مسبح', 'swim'],
-    'beach': ['playa', 'plage', 'strand', 'пляж', 'شاطئ', 'sea', 'mar', 'mer'],
-    'checkin': ['check-in', 'check in', 'arrive', 'arrival', 'llegada', 'arrivée', 'ankunft', 'заезд', 'وصول', 'key', 'lock', 'nuki', 'code', 'pin'],
-    'checkout': ['check-out', 'check out', 'depart', 'departure', 'salida', 'départ', 'abreise', 'выезд', 'مغادرة', 'leave', 'leaving'],
-    'restaurant': ['eat', 'food', 'dining', 'comer', 'restaurante', 'essen', 'ресторан', 'مطعم', 'dinner', 'lunch'],
-    'ac': ['air conditioning', 'aire acondicionado', 'climatisation', 'klimaanlage', 'кондиционер', 'مكيف', 'cooling', 'cool', 'cold', 'temperature'],
-    'heating': ['heat', 'warm', 'calefacción', 'chauffage', 'heizung', 'отопление', 'تدفئة', 'radiator', 'fireplace', 'chimenea', 'cheminée'],
-    'parking': ['car', 'park', 'coche', 'voiture', 'auto', 'машина', 'سيارة', 'aparcar', 'garer', 'parken'],
+    'beach': ['playa', 'plage', 'strand', 'пляж', 'شاطئ', 'seaside', 'coast'],
+    'checkin': ['check-in', 'check in', 'arrive', 'arrival', 'llegada', 'arrivée', 'ankunft', 'заезд', 'وصول', 'nuki', 'smart lock', 'door code'],
+    'checkout': ['check-out', 'check out', 'depart', 'departure', 'salida', 'départ', 'abreise', 'выезд', 'مغادرة', 'leaving'],
+    'restaurant': ['eating', 'food', 'dining', 'comer', 'restaurante', 'essen', 'ресторан', 'مطعم', 'dinner', 'lunch', 'eat', 'seafood'],
+    'ac': ['air conditioning', 'aire acondicionado', 'climatisation', 'klimaanlage', 'кондиционер', 'مكيف', 'cooling', 'temperature'],
+    'heating': ['heater', 'warm', 'calefacción', 'chauffage', 'heizung', 'отопление', 'تدفئة', 'radiator', 'fireplace', 'chimenea', 'cheminée'],
+    'parking': ['aparcar', 'garer', 'parken', 'машина', 'سيارة', 'estacionar', 'coche', 'voiture', 'car', 'park'],
     'children': ['kids', 'child', 'baby', 'niños', 'enfants', 'kinder', 'дети', 'أطفال', 'crib', 'highchair', 'playground'],
     'bbq': ['barbecue', 'grill', 'parrilla', 'barbacoa'],
-    'laundry': ['washer', 'dryer', 'washing', 'lavadora', 'lave-linge', 'waschmaschine', 'стиральная', 'غسالة', 'clothes'],
+    'laundry': ['washer', 'dryer', 'lavadora', 'lave-linge', 'waschmaschine', 'стиральная', 'غسالة', 'washing machine', 'clothes dryer', 'washing', 'clothes'],
     'tv': ['television', 'smart tv', 'netflix', 'streaming', 'bluetooth', 'audio', 'speaker', 'alexa'],
-    'taxi': ['cab', 'transport', 'transporte'],
-    'emergency': ['urgency', 'emergencia', 'help', 'police', 'hospital', 'doctor', 'ambulance'],
-    'supermarket': ['grocery', 'groceries', 'supermercado', 'supermarché', 'supermarkt', 'shopping', 'compras', 'shop']
+    'taxi': ['cab', 'transport', 'transporte', 'train', 'bus', 'renfe', 'station', 'tren', 'gare', 'bahnhof', 'estación', 'вокзал', 'محطة'],
+    'emergency': ['urgency', 'emergencia', 'police', 'hospital', 'doctor', 'ambulance', 'urgent'],
+    'supermarket': ['grocery', 'groceries', 'supermercado', 'supermarché', 'supermarkt', 'shopping', 'compras', 'market', 'shop']
 };
 
 function expandQuery(tokens) {
     const expanded = new Set(tokens);
     for (const [key, syns] of Object.entries(synonyms)) {
         const allTerms = [key, ...syns];
-        if (tokens.some(t => allTerms.some(s => s.includes(t) || t.includes(s)))) {
+        // Use EXACT word match only — no substring matching
+        if (tokens.some(t => allTerms.some(s => s === t))) {
             allTerms.forEach(s => expanded.add(s));
         }
     }
@@ -2764,15 +2772,25 @@ function scoreFAQ(faqItem, queryTokens) {
     const searchText = faqItem.searchText;
     const questionLower = faqItem.question.toLowerCase();
 
-    for (const token of expandedTokens) {
-        if (questionLower.includes(token)) score += 3;
-        if (searchText.includes(token)) score += 1;
+    // Original query tokens score higher (direct relevance)
+    for (const token of queryTokens) {
+        if (questionLower.includes(token)) score += 5;
+        else if (searchText.includes(token)) score += 2;
     }
 
-    // Exact phrase bonus
+    // Expanded synonym tokens score lower (indirect relevance)
+    const synonymOnly = expandedTokens.filter(t => !queryTokens.includes(t));
+    for (const token of synonymOnly) {
+        if (questionLower.includes(token)) score += 2;
+        else if (searchText.includes(token)) score += 1;
+    }
+
+    // Exact phrase bonus (strongest signal)
     const fullQuery = queryTokens.join(' ');
-    if (questionLower.includes(fullQuery)) score += 5;
-    if (searchText.includes(fullQuery)) score += 2;
+    if (fullQuery.length > 3) {
+        if (questionLower.includes(fullQuery)) score += 8;
+        else if (searchText.includes(fullQuery)) score += 4;
+    }
 
     return score;
 }
@@ -2791,9 +2809,10 @@ function searchFAQs(query) {
     if (scored.length === 0) return { best: null, related: [] };
 
     const best = scored[0];
-    const related = scored.slice(1, 4).filter(item => item.score >= 2);
+    const related = scored.slice(1, 4).filter(item => item.score >= 3);
 
-    return { best: best.score >= 3 ? best : null, related: best.score >= 3 ? related : scored.slice(0, 3) };
+    // Require minimum score of 4 for a confident "best" answer
+    return { best: best.score >= 4 ? best : null, related: best.score >= 4 ? related : scored.slice(0, 3) };
 }
 
 function formatAnswer(text) {
